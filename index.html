@@ -1,0 +1,56 @@
+<html>
+
+<head>
+	<title>Planes</title>
+	<link rel='stylesheet' type='text/css' href='style.css'>
+
+	<meta charset="UTF-8">
+	<meta name="description" content="VMF Preview DEMO">
+	<meta name="keywords" content="vmf, demo, preview, bsp, hammer editor, algorithm">
+	<meta name="author" content="Jakgor471">
+	<link rel="icon" type="image/x-icon" href="icon.png">
+
+	<script src="glmatrix/gl-matrix.js"></script>
+	<script src="vmflib.js"></script>
+	<script src="planes_csg.js"></script>
+	<script src="planes_graphics.js"></script>
+	<script src="planes_main.js"></script>
+</head>
+
+<body>
+	<div id='main'>
+		<h1>VMF Preview</h1>
+		<p>Demo by Jakgor471 (<a href='https://github.com/jakgor471/'>My GitHub</a>)</p>
+		
+		<canvas id="glcanvas" width="1000" height="600"></canvas>
+		<div><span id="error_log"></span></div>
+		<div id="controls">
+			<label for="select_method">Construction method:</label>
+			<select id="select_method">
+				<option value="0" selected>Clipping (Quake's method)</option>
+				<option value="1">Intersecting</option>
+			</select><br>
+			<!--<textarea id="solidtext" placeholder="Simple Solid Definition Format"></textarea>-->
+			<label for='button_file'>Load from file:</label>
+			<input id="button_file" type="file" accept=".vmf, .vmx"></input><br>
+			<input id="button_restart" type="button" value="Restart"></input>
+			<input id="button_pause" type="button" value="Play"></input>
+			<input id="button_nextframe" type="button" value="Next Frame"></input>
+			<input id="button_skip" type="button" value="Skip animation"></input><br>
+			<input id="input_jumpto" type="text" placeholder="1024" pattern="\d+"></input><input id="button_jumpto" type="button" value="Skip to solid id"></input>
+			<input id="button_goto" type="button" value="Go to"></input>
+			<br>
+			<input id="range_animspeed" type="range" min="0" max="1" step="0.001" value="0.9"><label for='range_animspeed'>Anim speed</label><br>
+			<input id="checkbox_drawgrid" type="checkbox" checked><label for='checkbox_drawgrid'>Draw grid</label><br>
+			<input id="checkbox_wireframe" type="checkbox"><label for='checkbox_wireframe'>Wireframe (lower FPS)</label><br>
+			<input id="checkbox_sideconstruction" type="checkbox" checked><label for='checkbox_sideconstruction'>Show side construction</label><br>
+			<input id="checkbox_drawplanes" type="checkbox"><label for='checkbox_drawplanes'>Show clipping planes</label><br><br>
+			<input id="checkbox_3dskybox" type="checkbox" checked><label for='checkbox_3dskybox'>Draw 3D Skybox</label><br><br>
+			<input id="range_fogstart" type="range" min="0" max="65526" step="1" value="16384"><label for='range_fogstart'>Fog start</label><br>
+			<input id="range_fogend" type="range" min="10" max="65536" step="1" value="32768"><label for='range_fogend'>Fog end</label><br>
+			<input id="range_fovizm" type="range" min="10" max="170" step="1" value="70"><label for='range_fovizm'>FOV</label><br>
+
+		</div>
+</body>
+
+</html>

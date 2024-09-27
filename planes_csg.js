@@ -601,11 +601,10 @@ function parseFromVmflib(solids, method){
     const vertexData = {smooth: new Map(), data: [], windings: [], dispData: [], displacements: [], dispSmooth: new Map(),
         windingTriangles: 0, dispTriangles: 0, uniqueVertices: 0};
     const animation = [];
-    const searchFrames = [];
 
     for(const solid of solids){
-        const sf = {solidId: solid.id, animFrame: animation.length, windingTriangles: vertexData.windingTriangles, dispTriangles: vertexData.dispTriangles};
-
+        const searchFrame = {frametype: "search", solidId: solid.id, animFrame: animation.length, windingTriangles: vertexData.windingTriangles, dispTriangles: vertexData.dispTriangles};
+        animation.push(searchFrame);
         for(const side of solid.sides){
             side.plane = planeFromTri(vmfLib.flipVector(side.triangle.p1), vmfLib.flipVector(side.triangle.p2), vmfLib.flipVector(side.triangle.p3));
 
@@ -617,14 +616,10 @@ function parseFromVmflib(solids, method){
         }
 
         if(method == 0)
-            sf.center = createSolid_quakemethod(solid.sides, animation, vertexData);
+            searchFrame.center = createSolid_quakemethod(solid.sides, animation, vertexData);
         else
-            sf.center = createSolid_intersectionMethod(solid.sides, animation, vertexData);
-
-        searchFrames.push(sf);
+            searchFrame.center = createSolid_intersectionMethod(solid.sides, animation, vertexData);
     }
-
-    searchFrames.sort((a, b) => a.solidId - b.solidId);
 
     const buffer = new ArrayBuffer(vertexData.windingTriangles * 72); //84
     let floatView = new Float32Array(buffer);
@@ -700,5 +695,5 @@ function parseFromVmflib(solids, method){
     animation.push({frametype: "advanceBuffer", start: vertexData.windingTriangles, add: 0});
     animation.push({frametype: "advanceBuffer", start: vertexData.dispTriangles, add: 0, disp: true});
     return {data: buffer, dispData: dispBuffer, numTriangles: vertexData.windingTriangles, 
-        numDispTriangles: vertexData.dispTriangles, animation: animation, searchFrames: searchFrames};
+        numDispTriangles: vertexData.dispTriangles, animation: animation};
 }

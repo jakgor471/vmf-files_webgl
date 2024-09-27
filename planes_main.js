@@ -57,6 +57,8 @@ class Camera{
     up;
     viewMatrix;
     rotMatrix;
+    trackPoint;
+    trackDist;
 
     static #TempQuat = glMatrix.quat.create();
     static #TempVec = glMatrix.vec3.create();
@@ -68,6 +70,10 @@ class Camera{
         this.forward = glMatrix.vec3.create();
         this.right = glMatrix.vec3.create();
         this.up = glMatrix.vec3.create();
+
+        this.trackPoint = null;
+        this.trackDist = 100;
+
         this.update(true);
     }
 
@@ -107,6 +113,10 @@ class Camera{
         this.viewMatrix[13] = 0;
         this.viewMatrix[14] = 0;
         this.viewMatrix[15] = 1;
+
+        if(this.trackPoint){
+            glMatrix.vec3.scaleAndAdd(this.position, this.trackPoint, this.forward, -this.trackDist);
+        }
 
         glMatrix.mat4.translate(this.viewMatrix, this.viewMatrix, glMatrix.vec3.negate(Camera.#TempVec, this.position));
     }
@@ -154,6 +164,18 @@ function main() {
         case "Shift":
             inputState.up = -1;
             break;
+        case "ArrowUp":
+            inputState.lookup = 1;
+            break;
+        case "ArrowDown":
+            inputState.lookdown = 1;
+            break;
+        case "ArrowLeft":
+            inputState.lookleft = 1;
+            break;
+        case "ArrowRight":
+            inputState.lookright = 1;
+            break;
         }
 
         event.stopPropagation();
@@ -179,6 +201,18 @@ function main() {
             break;
         case "Shift":
             inputState.up = 0;
+            break;
+        case "ArrowUp":
+            inputState.lookup = 0;
+            break;
+        case "ArrowDown":
+            inputState.lookdown = 0;
+            break;
+        case "ArrowLeft":
+            inputState.lookleft = 0;
+            break;
+        case "ArrowRight":
+            inputState.lookright = 0;
             break;
         }
         if(!inputState.control) return;
@@ -210,6 +244,8 @@ function main() {
     let nextFrameTime = 0;
     let fogStart = 0;
     let fogEnd = 32768;
+    let cameraTracking = document.getElementById("checkbox_trackcamera").checked;
+
     document.getElementById("checkbox_drawgrid").addEventListener("change", (event)=>{drawGrid = event.target.checked});
     document.getElementById("checkbox_wireframe").addEventListener("change", (event)=>{drawWireframe = event.target.checked});
     document.getElementById("checkbox_drawplanes").disabled = !showSideConstruction;
@@ -217,6 +253,10 @@ function main() {
         document.getElementById("checkbox_drawplanes").disabled = !event.target.checked});
     document.getElementById("checkbox_drawplanes").addEventListener("change", (event)=>{showClippingPlanes = event.target.checked});
     document.getElementById("checkbox_3dskybox").addEventListener("change", (event)=>{draw3DSkybox = event.target.checked});
+    document.getElementById("checkbox_trackcamera").addEventListener("change", (event)=>{
+        cameraTracking = event.target.checked;
+        camera.trackPoint = null;
+    });
     document.getElementById("range_animspeed").addEventListener("input", (event)=>{frametime = 1000*(1-(parseFloat(event.target.value)));});
     document.getElementById("range_fogstart").addEventListener("input", (event)=>{fogStart = parseFloat(event.target.value);});
     document.getElementById("range_fogend").addEventListener("input", (event)=>{fogEnd = parseFloat(event.target.value);});
@@ -229,7 +269,6 @@ function main() {
     let totalDispTriangles = 0;
     let curAnimFrame = 0;
     let animFrames = null;
-    let searchFrames = null;
     let compiledAnimFrame = null;
     let forceNewFrame = false;
     let paused = true;
@@ -265,12 +304,7 @@ function main() {
         setTimeout(()=>{errorLog.innerHTML = ""; errorLog.classList.remove("errorlog_info")}, 8000)
     }
 
-    const loadData = (dataInput) =>{
-        const loadedString = (new TextDecoder("utf-8")).decode(dataInput);
-
-        if(!loadedString)
-            return;
-
+    const loadVmf = (newVmfData, method) => {
         let time1 = window.performance.now();
 
         freeCompiledFrame(gl, compiledAnimFrame);
@@ -284,23 +318,17 @@ function main() {
 
         solidBuffer = gl.createBuffer()
         dispBuffer = gl.createBuffer()
-        let method = document.getElementById("select_method").selectedOptions[0].value;
-        let parsed = null;
+        const parsed = parseFromVmflib(newVmfData.solids, parseInt(method || 0));
 
-        try{
-            const vmfData = vmfLib.parseVmf(loadedString);
-            parsed = parseFromVmflib(vmfData.solids, parseInt(method || 0));
-
-            for(const entity of vmfData.entities){
-                if(entity.classname == "sky_camera"){
-                    skyCamera = {origin: vmfLib.flipVector(entity.origin), fogStart: parseFloat(entity.fogstart), fogEnd: parseFloat(entity.fogend)};
-                } else if(entity.classname == "env_fog_controller"){
-                    fogStart = parseFloat(entity.fogstart);
-                    fogEnd = parseFloat(entity.fogend);
-                }
+        for(const entity of newVmfData.entities){
+            if(entity.classname == "sky_camera"){
+                skyCamera = {origin: vmfLib.flipVector(entity.origin), fogStart: parseFloat(entity.fogstart), fogEnd: parseFloat(entity.fogend)};
+            } else if(entity.classname == "env_fog_controller"){
+                fogStart = parseFloat(entity.fogstart);
+                fogEnd = parseFloat(entity.fogend);
+                document.getElementById("range_fogstart").value = fogStart;
+                document.getElementById("range_fogend").value = fogEnd;
             }
-        } catch(error){
-            console.log(error)
         }
 
         if(!parsed)
@@ -312,7 +340,6 @@ function main() {
         dispTriangles = 0;
         totalTriangles = parsed.numTriangles;
         totalDispTriangles = parsed.numDispTriangles;
-        searchFrames = parsed.searchFrames;
 
         if(animFrames){
             toggleControls(true);
@@ -327,6 +354,21 @@ function main() {
         gl.bufferData(gl.ARRAY_BUFFER, parsed.data, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ARRAY_BUFFER, dispBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, parsed.dispData, gl.STATIC_DRAW);
+    }
+
+    let vmfData = null;
+    const loadData = (dataInput) =>{
+        const loadedString = (new TextDecoder("utf-8")).decode(dataInput);
+
+        if(!loadedString)
+            return;
+
+        try{
+            vmfData = vmfLib.parseVmf(loadedString);
+            loadVmf(vmfData, document.getElementById("select_method").selectedOptions[0].value);
+        } catch(error){
+            console.log(error)
+        }
     }
 
     const loadFile = (event)=>{
@@ -344,8 +386,54 @@ function main() {
         filereader.readAsArrayBuffer(fileselect.files[0]);
     }
 
+    const searchSolid = (solidId)=>{
+        if(!animFrames)
+            return;
+
+        for(const frame of animFrames){
+            if(frame.frametype != "search")
+                continue;
+            if(frame.solidId == solidId)
+                return frame;
+        }
+
+        return null;
+    }
+
     document.getElementById("select_method").addEventListener("input", (event)=>{
-        console.log(event.target.value);
+        if(!vmfData)
+            return;
+        let skip = curAnimFrame >= animFrames.length;
+        let solidid = -1;
+
+        if(!skip){
+            for(let i = curAnimFrame; i >= 0; --i){
+                if(animFrames[i].frametype == "search"){
+                    solidid = animFrames[i].solidId;
+                    break;
+                }
+            }
+        }
+
+        loadVmf(vmfData, event.target.value);
+
+        if(skip){
+            freeCompiledFrame(gl, compileAnimFrame);
+            compiledAnimFrame = null;
+            solidTriangles = totalTriangles;
+            dispTriangles = totalDispTriangles;
+            curAnimFrame = animFrames.length;
+        } else if(solidid > -1){
+            const foundFrame = searchSolid(solidid);
+
+            if(foundFrame){
+                freeCompiledFrame(gl, compiledAnimFrame);
+                compiledAnimFrame = null;
+                curAnimFrame = foundFrame.animFrame;
+                solidTriangles = foundFrame.windingTriangles;
+                dispTriangles = foundFrame.dispTriangles;
+            }
+        }
     });
     document.getElementById("button_file").addEventListener("input", loadFile);
 
@@ -372,29 +460,10 @@ function main() {
         freeCompiledFrame(gl, compiledAnimFrame);
         compiledAnimFrame = null;
         curAnimFrame = animFrames.length;
+        camera.trackPoint = null;
     })
 
-    const searchSolid = (solidId)=>{
-        let left = 0;
-        let right = searchFrames.length - 1;
-        let foundFrame = null;
-        while(left < right){
-            let middle = Math.floor((left + right) / 2);
-
-            if(searchFrames[middle].solidId == solidId){
-                return searchFrames[middle];
-            } else if(searchFrames[middle].solidId < solidId){
-                left = middle + 1;
-            } else {
-                right = middle - 1; 
-            }
-        }
-
-        return null;
-    }
     jumptobutton.addEventListener("click", (event)=>{
-        if(!searchFrames)
-            return;
         const solidId = +(document.getElementById("input_jumpto").value);
 
         if(isNaN(solidId)){
@@ -417,8 +486,6 @@ function main() {
     })
 
     gotobutton.addEventListener("click", (event)=>{
-        if(!searchFrames)
-            return;
         const solidId = +(document.getElementById("input_jumpto").value);
 
         if(isNaN(solidId)){
@@ -438,7 +505,8 @@ function main() {
             return;
         }
 
-        vieworigin = Array.from(foundFrame.center);
+        camera.position = Array.from(foundFrame.center);
+        camera.update(false);
     })
 
     const fogcolor = [1, 0.95, 0.9];
@@ -808,16 +876,36 @@ function main() {
         deltaTime = time * 0.001 - lastTime;
         lastTime = time * 0.001;
 
-        if(inputState.w > 0)
-            glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.forward, 1600 * deltaTime);
-        else if(inputState.s > 0)
-            glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.forward, -1600 * deltaTime);
-        if(inputState.d != 0)
-            glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.right, 1600 * deltaTime);
-        if(inputState.a != 0)
-            glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.right, -1600 * deltaTime);
-        if(inputState.up != 0)
-            glMatrix.vec3.scaleAndAdd(camera.position, camera.position, [0, 1, 0], inputState.up * 1600 * deltaTime);
+        if(inputState.lookleft > 0){
+            camera.rotation[1] -= 2 * deltaTime;
+        } else if(inputState.lookright > 0){
+            camera.rotation[1] += 2 * deltaTime;
+        }
+
+        if(inputState.lookup > 0){
+            camera.rotation[0] -= 2 * deltaTime;
+        } else if(inputState.lookdown > 0){
+            camera.rotation[0] += 2 * deltaTime;
+        }
+
+        if(camera.trackPoint){
+            if(inputState.s > 0)
+                camera.trackDist += 1600 * deltaTime;
+            else if(inputState.w > 0)
+                camera.trackDist = Math.max(camera.trackDist - 1600 * deltaTime, 0);
+        } else {
+            if(inputState.w > 0)
+                glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.forward, 1600 * deltaTime);
+            else if(inputState.s > 0)
+                glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.forward, -1600 * deltaTime);
+            if(inputState.d > 0)
+                glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.right, 1600 * deltaTime);
+            else if(inputState.a > 0)
+                glMatrix.vec3.scaleAndAdd(camera.position, camera.position, camera.right, -1600 * deltaTime);
+            if(inputState.up != 0)
+                glMatrix.vec3.scaleAndAdd(camera.position, camera.position, [0, 1, 0], inputState.up * 1600 * deltaTime);
+        }
+
         camera.update(true);
 
         if(time > nextFrameTime && animFrames && !paused || forceNewFrame){
@@ -826,6 +914,7 @@ function main() {
             if(curAnimFrame >= animFrames.length){
                 paused = true;
                 pausebutton.value = "Play";
+                camera.trackPoint = null;
             } else {
                 for(; curAnimFrame < animFrames.length; ++curAnimFrame){
                     if(animFrames[curAnimFrame].frametype == "draw" && showSideConstruction){
@@ -846,6 +935,12 @@ function main() {
                         
                         if(!showSideConstruction)
                             break;
+                    } else if(animFrames[curAnimFrame].frametype == "search" && cameraTracking){
+                        const center = animFrames[curAnimFrame].center;
+                        if(center){
+                            camera.trackPoint = center;
+                            camera.update(false);
+                        }
                     }
                 }
 
@@ -970,6 +1065,7 @@ function main() {
         gl.uniform1f(genericShd.uniforms.get("fogMin"), fogStart);
         gl.uniform1f(genericShd.uniforms.get("fogMax"), fogEnd);
         if(drawGrid){
+            gl.uniform1f(genericShd.uniforms.get("fogIntensity"), 0);
             gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
             gl.enableVertexAttribArray(0);
             gl.enableVertexAttribArray(1);

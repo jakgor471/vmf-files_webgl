@@ -268,6 +268,11 @@ function main() {
     const loadData = (dataInput) =>{
         const loadedString = (new TextDecoder("utf-8")).decode(dataInput);
 
+        if(!loadedString)
+            return;
+
+        let time1 = window.performance.now();
+
         freeCompiledFrame(gl, compiledAnimFrame);
         compiledAnimFrame = null;
         if(solidBuffer)
@@ -296,7 +301,6 @@ function main() {
             }
         } catch(error){
             console.log(error)
-            logError(fileselect.files[0].name + ": " + error.message);
         }
 
         if(!parsed)
@@ -317,6 +321,8 @@ function main() {
         forceNewFrame = false;
         paused = true;
 
+        logInfo(`Map loaded in ${window.performance.now() - time1} ms`);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, solidBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, parsed.data, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ARRAY_BUFFER, dispBuffer);
@@ -324,16 +330,13 @@ function main() {
     }
 
     const loadFile = (event)=>{
-        let fileselect = event.target;
+        let fileselect = event != null ? event.target : document.getElementById("button_file");
         if(!fileselect.files[0])
             return;
         let filereader = new FileReader();
         filereader.onload = ()=>{
-            let time1 = window.performance.now();
-
             loadData(filereader.result);
 
-            logInfo(`Map loaded in ${window.performance.now() - time1} ms`);
             let shortname = fileselect.files[0].name || "";
             shortname = shortname.substring(Math.max(shortname.lastIndexOf("/"), shortname.lastIndexOf("\\"), 0));
             document.title = "VMF: " + shortname;
@@ -341,6 +344,9 @@ function main() {
         filereader.readAsArrayBuffer(fileselect.files[0]);
     }
 
+    document.getElementById("select_method").addEventListener("input", (event)=>{
+        console.log(event.target.value);
+    });
     document.getElementById("button_file").addEventListener("input", loadFile);
 
     pausebutton.addEventListener("click", (event)=>{

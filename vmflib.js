@@ -136,7 +136,7 @@
 		lexer.consume(lexer);
 
 		const kv = vmfParseKeyValues(lexer);
-		const dispinfo = {power: parseInt(kv.get("power") || "4"), normals:[], offsets:[],offset_normals:[],distances:[],alphas:[]};
+		const dispinfo = {power: parseInt(kv.get("power") || "4"), elevation: parseInt(kv.get("elevation") || "0"), normals:[], offsets:[],offset_normals:[],distances:[],alphas:[]};
 		const posmatched = (kv.get("startposition")).match(/\[([\d\.e-]+)\s([\d\.e-]+)\s([\d\.e-]+)\]/);
 		dispinfo.startPosition = [parseFloat(posmatched[1]), parseFloat(posmatched[2]), parseFloat(posmatched[3])];
 		dispinfo.elevation = parseFloat(kv.get("elevation"));
@@ -315,8 +315,8 @@
 	}
 
 	function flipVector(p){
-        // X Y Z => -X Z Y, from Source's/Quake's coordinates to OpenGL
-        const p2 = [-p[0], p[2], p[1]];
+        // X Y Z <=> X Z -Y, from Source's/Quake's coordinates to OpenGL
+        const p2 = [p[0], p[2], -p[1]];
 
         return p2;
     }

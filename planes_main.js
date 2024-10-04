@@ -4,10 +4,10 @@ function compileAnimFrame(gl, animFrame){
     const compiled = {draw: []};
 
     for(let i = 0; i < animFrame.length; ++i){
-        if(animFrame[i].type == "winding"){
+        if(animFrame[i].type == "w"){
             const data = new ArrayBuffer(8192);
 
-            if(animFrame[i].data.length > 32) continue; //too big winding!
+            if(!animFrame[i].data || animFrame[i].data.length > 32) continue; //too big winding or no winding!
 
             let size = windingToBuffer(animFrame[i].data, data, 0);
             if(size < 1)
@@ -16,10 +16,10 @@ function compileAnimFrame(gl, animFrame){
             gl.bindBuffer(gl.ARRAY_BUFFER, buff);
             gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(data, 0, size), gl.DYNAMIC_DRAW);
 
-            compiled.draw.push({type: "winding", buffer: buff, elements: animFrame[i].data.length - 2});
+            compiled.draw.push({type: "w", buffer: buff, elements: animFrame[i].data.length - 2});
         }
 
-        if(animFrame[i].type == "plane"){
+        if(animFrame[i].type == "p"){
             const data = new ArrayBuffer(512);
 
             const winding = baseWinding(animFrame[i].data, MAXMAPSIZE / 2);
@@ -28,11 +28,11 @@ function compileAnimFrame(gl, animFrame){
             gl.bindBuffer(gl.ARRAY_BUFFER, buff);
             gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(data, 0, size), gl.DYNAMIC_DRAW);
 
-            compiled.draw.push({type: "plane", buffer: buff, color: animFrame[i].color || [1, 0, 0, 1]});
+            compiled.draw.push({type: "p", buffer: buff, color: animFrame[i].color || [1, 0, 0, 1]});
         }
 
-        if(animFrame[i].type == "point"){
-            compiled.draw.push({type: "point", data: animFrame[i].data, color: animFrame[i].color || [1, 0, 0, 1]});
+        if(animFrame[i].type == "pt"){
+            compiled.draw.push({type: "pt", data: animFrame[i].data, color: animFrame[i].color || [1, 0, 0, 1]});
         }
     }
 
@@ -418,7 +418,7 @@ function main() {
         loadVmf(vmfData, event.target.value);
 
         if(skip){
-            freeCompiledFrame(gl, compileAnimFrame);
+            freeCompiledFrame(gl, compiledAnimFrame);
             compiledAnimFrame = null;
             solidTriangles = totalTriangles;
             dispTriangles = totalDispTriangles;
@@ -666,7 +666,7 @@ function main() {
         out vec2 outVtex;
 
         void main() {
-            gl_Position = vec4(vpos, 1.0, 1.0);
+            gl_Position = vec4(vpos, 0.0, 1.0);
             outVtex = vtex;
         }
     `
@@ -753,7 +753,7 @@ function main() {
     const gridScaleLog = Math.log2(gridScale);
 
     let gridDetails = [0, gridScale];
-    for(let i = 2; i < Math.log2(gridCell) + 1; ++i){
+    for(let i = 2; i < Math.log2(gridCell); ++i){
         gridDetails[i] = gridDetails[i - 1] + (2 << (i + gridScaleLog - 2));
     }
 
@@ -808,7 +808,7 @@ function main() {
         -1, -1, 1, -1, -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, -1,
         -1, 1, 1, -1, 1, -1, 1, 1, -1, -1, 1, 1, 1, 1, -1, 1, 1, 1,
         1, -1, -1,-1, -1, -1,-1, -1, 1,1, -1, 1,1, -1, -1,-1, -1, 1,
-        ]), gl.STATIC_DRAW);
+    ]), gl.STATIC_DRAW);
 
     let lightDir = glMatrix.vec3.normalize(glMatrix.vec3.create(), [-1, -0.4, 0.3]);
 
@@ -877,15 +877,15 @@ function main() {
         lastTime = time * 0.001;
 
         if(inputState.lookleft > 0){
-            camera.rotation[1] -= 2 * deltaTime;
+            camera.rotation[1] -= 3 * deltaTime;
         } else if(inputState.lookright > 0){
-            camera.rotation[1] += 2 * deltaTime;
+            camera.rotation[1] += 3 * deltaTime;
         }
 
         if(inputState.lookup > 0){
-            camera.rotation[0] -= 2 * deltaTime;
+            camera.rotation[0] -= 3 * deltaTime;
         } else if(inputState.lookdown > 0){
-            camera.rotation[0] += 2 * deltaTime;
+            camera.rotation[0] += 3 * deltaTime;
         }
 
         if(camera.trackPoint){
@@ -917,13 +917,17 @@ function main() {
                 camera.trackPoint = null;
             } else {
                 for(; curAnimFrame < animFrames.length; ++curAnimFrame){
-                    if(animFrames[curAnimFrame].frametype == "draw" && showSideConstruction){
+                    if(animFrames[curAnimFrame].frametype == "d" && showSideConstruction){
+                        if(animFrames[curAnimFrame].toprint){
+                            console.log.apply(null, animFrames[curAnimFrame].toprint);
+                        }
                         compiledAnimFrame = compileAnimFrame(gl, animFrames[curAnimFrame].data);
                         break;
-                    } else if(animFrames[curAnimFrame].frametype == "advanceBuffer"){
+                    } else if(animFrames[curAnimFrame].frametype == "ab"){
                         let start = animFrames[curAnimFrame].start;
+                        let disp = animFrames[curAnimFrame].disp
 
-                        if(animFrames[curAnimFrame].disp){
+                        if(disp){
                             if(start < 0)
                                 start = dispTriangles;
                             dispTriangles = start + animFrames[curAnimFrame].add;
@@ -933,7 +937,7 @@ function main() {
                             solidTriangles = start + animFrames[curAnimFrame].add;
                         }
                         
-                        if(!showSideConstruction)
+                        if(!showSideConstruction && !disp || disp && showSideConstruction)
                             break;
                     } else if(animFrames[curAnimFrame].frametype == "search" && cameraTracking){
                         const center = animFrames[curAnimFrame].center;
@@ -941,7 +945,8 @@ function main() {
                             camera.trackPoint = center;
                             camera.update(false);
                         }
-                    }
+                    } else if(animFrames[curAnimFrame].frametype == "nd")
+                        break;
                 }
 
                 nextFrameTime = time + frametime;
@@ -963,6 +968,7 @@ function main() {
         gl.enable(gl.DEPTH_TEST);
         gl.enable(gl.CULL_FACE);
         gl.cullFace(gl.BACK);
+        gl.frontFace(gl.CCW);
 
         /*let cospitch = Math.cos(viewpitch);
         const eyepos = [Math.cos(-viewangle) * viewdist * cospitch, Math.sin(viewpitch) * viewdist, Math.sin(viewangle) * viewdist * cospitch];
@@ -1097,7 +1103,8 @@ function main() {
             for(let i = 0; i < compiledAnimFrame.draw.length; ++i){
                 let dr = compiledAnimFrame.draw[i];
 
-                if(dr.type != "winding") continue;
+                //winding
+                if(dr.type != "w") continue;
                 gl.bindBuffer(gl.ARRAY_BUFFER, dr.buffer);
                 gl.enableVertexAttribArray(0);
                 gl.enableVertexAttribArray(1);
@@ -1107,13 +1114,16 @@ function main() {
             }
 
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferPoint);
+            gl.enableVertexAttribArray(0);
             gl.disableVertexAttribArray(1);
             gl.disableVertexAttribArray(2);
             gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
             for(let i = 0; i < compiledAnimFrame.draw.length; ++i){
                 let dr = compiledAnimFrame.draw[i];
-                if(dr.type != "point") continue;
+
+                //point
+                if(dr.type != "pt") continue;
 
                 gl.uniformMatrix4fv(genericShd.uniforms.get("model"), false, glMatrix.mat4.fromTranslation(glMatrix.mat4.create(), dr.data));
                 gl.vertexAttrib4f(1, dr.color[0], dr.color[1], dr.color[2], 1);
@@ -1129,7 +1139,8 @@ function main() {
             for(let i = 0; i < compiledAnimFrame.draw.length && showClippingPlanes; ++i){
                 let dr = compiledAnimFrame.draw[i];
 
-                if(dr.type != "plane") continue;
+                //plane
+                if(dr.type != "p") continue;
                 gl.bindBuffer(gl.ARRAY_BUFFER, dr.buffer);
                 gl.enableVertexAttribArray(0);
                 gl.disableVertexAttribArray(1);
@@ -1160,6 +1171,7 @@ function main() {
 
         /*Post processing*/
         gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.CULL_FACE);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, screenQuadBuffer)
         gl.enableVertexAttribArray(0);

@@ -3,26 +3,18 @@
 /*
 ============ Plane thingies ============
 */
-const EPSILON = 1.0/32768;
+const EPSILON = 1.0/512;
 
 function planeFromTri(p1, p2, p3){
-    let normal = glMatrix.vec3.cross(glMatrix.vec3.create(), [p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2]], [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]]);
+    let normal = glMatrix.vec3.cross(glMatrix.vec3.create(), [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]], [p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]]);
     glMatrix.vec3.normalize(normal, normal);
 
     let dist = glMatrix.vec3.dot(normal, p1);
     return [normal[0], normal[1], normal[2], dist];
 }
 
-function baseWinding(plane, size){
+function baseWinding2(plane, size){
     /*Projects 4 points from AA plane onto the side's plane*/
-    const buffer = new ArrayBuffer(6 * 12);
-    const floatView = new Float32Array(buffer);
-
-    const normX = plane[0];
-    const normY = plane[1];
-    const normZ = plane[2];
-    const plD = plane[3];
-
     let max = Math.abs(plane[0]);
     let i = 0;
     for(let j = 1; j < 3; ++j){
@@ -74,6 +66,44 @@ function baseWinding(plane, size){
     if(i == 1 && planeN[1] > 0){
         return [p4, p3, p2, p1];
     }
+
+    return [p1, p2, p3, p4];
+}
+
+function baseWinding(plane, size){
+    const globalUp = glMatrix.vec3.create(0, 0, 0);
+    let max = Math.abs(plane[0]);
+    let i = 0;
+    for(let j = 1; j < 3; ++j){
+        if(max < Math.abs(plane[j])){
+            max = Math.abs(plane[j]);
+            i = j;
+        }
+    }
+
+    if(i == 1)
+        globalUp[0] = 1;
+    else
+        globalUp[1] = 1;
+
+    const right = glMatrix.vec3.cross(glMatrix.vec3.create(), plane, globalUp);
+    glMatrix.vec3.normalize(right, right);
+    glMatrix.vec3.scale(right, right, size / 2.0);
+    const up = glMatrix.vec3.cross(glMatrix.vec3.create(), plane, right);
+    const offset = glMatrix.vec3.copy(glMatrix.vec3.create(), plane);
+    glMatrix.vec3.scale(offset, offset, plane[3]);
+
+    const p1 = glMatrix.vec3.scaleAndAdd(glMatrix.vec3.create(), offset, right, -1);
+    glMatrix.vec3.add(p1, p1, up);
+
+    const p2 = glMatrix.vec3.scaleAndAdd(glMatrix.vec3.create(), offset, right, -1);
+    glMatrix.vec3.scaleAndAdd(p2, p2, up, -1);
+
+    const p3 = glMatrix.vec3.add(glMatrix.vec3.create(), offset, right);
+    glMatrix.vec3.scaleAndAdd(p3, p3, up, -1);
+
+    const p4 = glMatrix.vec3.add(glMatrix.vec3.create(), offset, right);
+    glMatrix.vec3.add(p4, p4, up);
 
     return [p1, p2, p3, p4];
 }
@@ -172,9 +202,9 @@ function hashKeyVector(p){
 }
 
 function getVertexIndex(p, n, prevpoint, nextpoint, group, vertexData){
-    const hash = hashKeyVector(p);
-    let entry = vertexData.smooth.get(hash);
-    let shouldAdd = false;
+    //const hash = hashKeyVector(p);
+    //let entry = vertexData.smooth.get(hash);
+    //let shouldAdd = false;
 
     vertexData.data.push(p[0], p[1], p[2], n[0], n[1], n[2]);
     return vertexData.uniqueVertices++;
@@ -217,9 +247,10 @@ function getVertexIndex(p, n, prevpoint, nextpoint, group, vertexData){
     return selected.index;*/
 }
 
-function createDisplacement(side, points, vertexData){
-    if(points.length > 4)
+function createDisplacement(side, points, vertexData, animation){
+    if(points.length != 4)
         return;
+
     const dispinfo = side.dispInfo;
     const startposition = vmfLib.flipVector(dispinfo.startPosition);
     let startpoint = 0;
@@ -258,16 +289,15 @@ function createDisplacement(side, points, vertexData){
             const offset = vmfLib.flipVector(dispinfo.offsets[index] || [0,0,0]);
             const dist = dispinfo.distances[index];
             glMatrix.vec3.scaleAndAdd(vert, vert, normal, dist);
+            glMatrix.vec3.scaleAndAdd(vert, vert, offsetNormal, dispinfo.elevation);
             glMatrix.vec3.add(vert, vert, offset);
 
             vertexData.dispData.push(vert[0], vert[1], vert[2], 0, 0, 0);
         }
     }
 
-    let flag = false;
+    let flag = true;
     for(let i = 0; i < numTriangles; ++i){
-        flag = !flag;
-
         for(let j = 0; j < numTriangles; ++j){
             const p1 = indexOffset + i * numVertices + j;
             const p2 = indexOffset + (i + 1) * numVertices + j;
@@ -318,9 +348,17 @@ function createDisplacement(side, points, vertexData){
                 vertexData.displacements.push(p4, p2, p1, p4, p3, p2);
             }
 
+            animation.push({frametype: "ab", start: -1, add: 1, disp: true});
+            animation.push({frametype: "ab", start: -1, add: 1, disp: true});
+
             flag = !flag;
         }
+
+        flag = !flag;
     }
+
+    //next displacement frame
+    animation.push({frametype: "nd"});
 
     for(let i = indexOffset; i < indexOffset+triTotal; ++i){
         const normal = glMatrix.vec3.fromValues(vertexData.dispData[i * 6 + 3], vertexData.dispData[i * 6 + 4], vertexData.dispData[i * 6 + 5]);
@@ -381,30 +419,29 @@ function createSolid_quakemethod(sides, animation, vertexData){
 
         const pl1 = sides[i].plane;
         const winding = [];
-        let points = baseWinding(sides[i].plane, MAXMAPSIZE >> 1);
-        animation.push({frametype: "draw", data: [{type: "winding", data: points}]});
+        let points = baseWinding(sides[i].plane, MAXMAPSIZE / 2);
+        animation.push({frametype: "d", data: [{type: "w", data: points}]});
 
         for(let j = 0; j < sides.length && points; ++j){
             const pl2 = sides[j].plane;
             if(Math.abs(glMatrix.vec3.dot(pl1, pl2)) > 1-EPSILON) continue; //planes are parallel
 
             points = clipWinding(points, pl2);
-            animation.push({frametype: "draw", data: [{type: "winding", data: points}, {type: "plane", data: pl2, color: colors[(i + j) & 3]}]});
+            animation.push({frametype: "d", data: [{type: "w", data: points}, {type: "p", data: pl2, color: colors[(i + j) & 3]}]});
         }
 
         if(!points || points.length < 3) continue; //it shouldn't happen, but just in case :)
 
-        if(sides[i].displacement){
-            const disptris = createDisplacement(sides[i], points, vertexData);
-            animation.push({frametype: "advanceBuffer", start: -1, add: disptris, disp: true});
-        } else {
-            animation.push({frametype: "advanceBuffer", start: -1, add: points.length - 2});
+        for(let j = 0; j < points.length; ++j){
+            points[j][0] = Math.round(points[j][0] * ROUNDING) * ROUNDING_REC;
+            points[j][1] = Math.round(points[j][1] * ROUNDING) * ROUNDING_REC;
+            points[j][2] = Math.round(points[j][2] * ROUNDING) * ROUNDING_REC;
+        }
 
-            for(let j = 0; j < points.length; ++j){
-                points[j][0] = Math.round(points[j][0] * ROUNDING) * ROUNDING_REC;
-                points[j][1] = Math.round(points[j][1] * ROUNDING) * ROUNDING_REC;
-                points[j][2] = Math.round(points[j][2] * ROUNDING) * ROUNDING_REC;
-            }
+        if(sides[i].displacement){
+            const disptris = createDisplacement(sides[i], points, vertexData, animation);
+        } else {
+            animation.push({frametype: "ab", start: -1, add: points.length - 2});
 
             for(let j = 0; j < points.length; ++j){
                 const prevpoint = points[(j + points.length - 1) % points.length];
@@ -440,6 +477,15 @@ function threePlaneIndex(i, j, k){
     return i | j << 8 | k << 16;
 }
 
+function threePlaneIndexStr(i, j, k){
+    let temp = i;
+    if(i > j){ temp = i; i = j; j = temp;} //sort i, j, k
+    if(j > k){ temp = j; j = k; k = temp;}
+    if(i > j){ temp = i; i = j; j = temp;}
+
+    return i + " " + j + " " + k;
+}
+
 function pointInHull(point, sides){
     for(let i = 0; i < sides.length; ++i){
         if(glMatrix.vec3.dot(point, sides[i].plane) - sides[i].plane[3] < -EPSILON)
@@ -449,7 +495,7 @@ function pointInHull(point, sides){
     return true;
 }
 
-function pointOfIntersection(pl1, pl2, pl3){
+function pointOfIntersection2(pl1, pl2, pl3){
     /*Math magic, got it by solving a system of equations:
     A1x + B1y + C1z = D1, A2x + B2y + C2z = D2, A3x + B3y + C3z = D3,
     where ABC are components of a plane normal and D are distances.
@@ -458,13 +504,35 @@ function pointOfIntersection(pl1, pl2, pl3){
     (pl3[0] * pl2[1] * pl1[2]) - (pl1[0] * pl3[1] * pl2[2]) - (pl2[0] * pl1[1] * pl3[2]);
 
     if(Math.abs(det) < EPSILON) return null;
-
-    const x = (pl2[1]*pl3[2] - pl3[1]*pl2[2])*pl1[3] + (-pl1[1]*pl3[2]+pl3[1]*pl1[2])*pl2[3] + (pl1[1]*pl2[2]-pl2[1]*pl1[2])*pl3[3];
-    const y = (-pl2[0]*pl3[2]+pl3[0]*pl2[2])*pl1[3] + (pl1[0]*pl3[2]-pl3[0]*pl1[2])*pl2[3] + (-pl1[0]*pl2[2]+pl2[0]*pl1[2])*pl3[3];
-    const z = (pl2[0]*pl3[1]-pl3[0]*pl2[1])*pl1[3] + (-pl1[0]*pl3[1]+pl3[0]*pl1[1])*pl2[3] + (pl1[0]*pl2[1]-pl2[0]*pl1[1])*pl3[3];
+            // B2 C3 - B3 C2                            B3 C1 - B1 C3                           B1 C2 - B2 C1
+    const x = (pl2[1]*pl3[2] - pl3[1]*pl2[2])*pl1[3] + (pl3[1]*pl1[2] - pl1[1]*pl3[2])*pl2[3] + (pl1[1]*pl2[2] - pl2[1]*pl1[2])*pl3[3];
+            // A3 C2 - A2 C3                            A1 C3 - A3 C2                           A2 C1 - A1 C2
+    const y = (pl3[0]*pl2[2] - pl2[0]*pl3[2])*pl1[3] + (pl1[0]*pl3[2] - pl3[0]*pl1[2])*pl2[3] + (pl2[0]*pl1[2] - pl1[0]*pl2[2])*pl3[3];
+            // A2 B3 - A3 B2                            A3 B1 - A1 B3                           A1 B2 - A2 B1
+    const z = (pl2[0]*pl3[1] - pl3[0]*pl2[1])*pl1[3] + (pl3[0]*pl1[1] - pl1[0]*pl3[1])*pl2[3] + (pl1[0]*pl2[1] - pl2[0]*pl1[1])*pl3[3];
     const detRec = 1.0 / det;
 
     return [x * detRec, y * detRec, z * detRec];
+}
+
+function pointOfIntersection(pl1, pl2, pl3){
+    const cross = glMatrix.vec3.create();
+
+    const det = glMatrix.vec3.dot(pl1, glMatrix.vec3.cross(cross, pl2, pl3));
+
+    if(Math.abs(det) < EPSILON) return null;
+
+    const result = glMatrix.vec3.create();
+    glMatrix.vec3.cross(cross, pl2, pl3);
+    glMatrix.vec3.scaleAndAdd(result, result, cross, pl1[3]);
+    glMatrix.vec3.cross(cross, pl3, pl1);
+    glMatrix.vec3.scaleAndAdd(result, result, cross, pl2[3]);
+    glMatrix.vec3.cross(cross, pl1, pl2);
+    glMatrix.vec3.scaleAndAdd(result, result, cross, pl3[3]);
+
+    const detRec = 1.0 / det;
+
+    return glMatrix.vec3.scale(result, result, detRec);
 }
 
 function createSolid_intersectionMethod(sides, animation, vertexData){
@@ -473,16 +541,19 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
         [0.831, 0.694, 0.235, 1], [0.769, 0.878, 0.439, 1], [0.831, 0.286, 0.235, 1], [0.796, 0.624, 0.91, 1] 
     ]
 
-    let shouldAnimate = sides.length < 16;
+    const shouldAnimateInvalids = sides.length < 64; //too many invalid points will be generated!
     const brushCenter = glMatrix.vec3.create();
     let numpoints = 0;
 
+    const intSet = new Set();
     for(let i = 0; i < sides.length; ++i){
         if(!sides[i].draw) continue;
 
         const center = [0, 0, 0];
         let points = [];
         const invalidPoints = [];
+
+        intSet.clear();
 
         const pl1 = sides[i].plane;
         for(let j = 0; j < sides.length; ++j){
@@ -493,10 +564,16 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
                 if(Math.abs(glMatrix.vec3.dot(pl1, pl3)) > 1-EPSILON || Math.abs(glMatrix.vec3.dot(pl2, pl3)) > 1-EPSILON ) continue; //plane is parallel to p1 or p2
 
                 const intIndex = threePlaneIndex(i, j, k);
+
+                if(intSet.has(intIndex))
+                    continue;
+
+                intSet.add(intIndex);
+
                 const intInfo = intMap.get(intIndex);
 
                 let p;
-                let valid;
+                let valid = false;
                 if(!intInfo){
                     p = pointOfIntersection(pl1, pl2, pl3);
                     if(!p) continue;
@@ -511,7 +588,7 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
                     valid = intInfo.validIntersection;
                 }
 
-                const animData = [{type: "plane", data: pl1, color: colors[(i) & 3]}, {type: "winding", data: points}];
+                const animData = [{type: "p", data: pl1, color: colors[(i) & 3]}];
 
                 if(valid){
                     points.push(p);
@@ -520,14 +597,15 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
                     invalidPoints.push(p);
                 }
 
-                if(shouldAnimate){
-                    for(let np = 0; np < points.length; ++np)
-                        animData.push({type: "point", data: points[np], color: [0, 1, 0, 1]});
-                    for(let np = 0; np < invalidPoints.length; ++np)
-                        animData.push({type: "point", data: invalidPoints[np], color: [1, 0, 0, 1]});
+                for(let np = 0; np < points.length; ++np)
+                    animData.push({type: "pt", data: points[np], color: [0, 1, 0, 1]});
 
-                    animation.push({frametype: "draw", data: animData});
+                if(shouldAnimateInvalids){
+                    for(let np = 0; np < invalidPoints.length; ++np)
+                        animData.push({type: "pt", data: invalidPoints[np], color: [1, 0, 0, 1]});
                 }
+
+                animation.push({frametype: "d", data: animData});
             }
         }
 
@@ -536,48 +614,48 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
         const pRec = 1.0 / points.length;
         center[0] *= pRec; center[1] *= pRec; center[2] *= pRec;
 
-        //points need to be sorted into 
+        //points need to be sorted 
+        const tempVector = glMatrix.vec3.create();
         for(let j = 0; j < points.length - 1; ++j){
-            let tocenter = glMatrix.vec3.subtract(glMatrix.vec3.create(), points[j], center);
-            glMatrix.vec3.normalize(tocenter, tocenter);
-            let plnormal = glMatrix.vec3.cross(glMatrix.vec3.create(), tocenter, pl1);
-            let dist = glMatrix.vec3.dot(points[j], plnormal);
+            const fromcenter = glMatrix.vec3.subtract(glMatrix.vec3.create(), points[j], center);
 
-            let smallestAng = -65536;
+            let dotMax = Number.MIN_SAFE_INTEGER;
             let smallest = j + 1;
 
-            for(let k = j + 1; k < points.length; ++k){
-                if(glMatrix.vec3.dot(plnormal, points[k]) - dist > -EPSILON) continue;
+            for(let k = smallest; k < points.length; ++k){
+                const fromcenter2 = glMatrix.vec3.subtract(glMatrix.vec3.create(), points[k], center);
+                const cross = glMatrix.vec3.dot(pl1, glMatrix.vec3.cross(tempVector, fromcenter, fromcenter2));
 
-                let dot = glMatrix.vec3.dot(tocenter, points[k]);
-                if(dot > smallestAng){
+                if(cross < EPSILON)
+                    continue;
+
+                glMatrix.vec3.normalize(fromcenter2, fromcenter2);
+                let dot = glMatrix.vec3.dot(fromcenter2, fromcenter);
+                if(dot > dotMax){
+                    dotMax = dot;
                     smallest = k;
-                    smallestAng = dot;
                 }
             }
 
-            let temp = points[j + 1];
+            const temp = points[j + 1];
             points[j + 1] = points[smallest];
             points[smallest] = temp;
         }
 
-        points = points.slice(0, points.length / 2); //points seem to be doubled. Why? Don't know
-        //a hacky solution for a crappy algorithm hehe
-
         if(sides[i].displacement){
-            const disptris = createDisplacement(sides[i], points, vertexData);
-            animation.push({frametype: "advanceBuffer", start: -1, add: disptris, disp: true});
+            createDisplacement(sides[i], points, vertexData, animation);
         } else {
             const winding = [];
+            let prevpoint = points[points.length - 1];
             for(let j = 0; j < points.length; ++j){
-                const prevpoint = points[(j + points.length - 1) % points.length];
                 const nextpoint = points[(j + 1) % points.length];
 
                 winding.push(getVertexIndex(points[j], glMatrix.vec3.negate(glMatrix.vec3.create(), sides[i].plane), prevpoint, nextpoint, 0, vertexData));
+                prevpoint = points[j];
             }
 
             vertexData.windings.push(winding);
-            animation.push({frametype: "advanceBuffer", start: -1, add: points.length - 2});
+            animation.push({frametype: "ab", start: -1, add: points.length - 2});
             vertexData.windingTriangles += points.length - 2;
         }
 
@@ -692,8 +770,9 @@ function parseFromVmflib(solids, method){
         offset += 18;
     }
 
-    animation.push({frametype: "advanceBuffer", start: vertexData.windingTriangles, add: 0});
-    animation.push({frametype: "advanceBuffer", start: vertexData.dispTriangles, add: 0, disp: true});
+    animation.push({frametype: "ab", start: vertexData.windingTriangles, add: 0});
+    animation.push({frametype: "ab", start: vertexData.dispTriangles, add: 0, disp: true});
+
     return {data: buffer, dispData: dispBuffer, numTriangles: vertexData.windingTriangles, 
         numDispTriangles: vertexData.dispTriangles, animation: animation};
 }

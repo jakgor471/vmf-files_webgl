@@ -86,7 +86,7 @@ function generateGridLineBuffer(gridsize, biggest){
     addLine(dataview, 0, 0, -(lines), 0, 0, (lines), 0, 0, 255, 0);
 
     const scale = lines / biggest;
-    for(let i = 0; i < scale*2 + 1; ++i){
+    for(let i = 0; i < scale*2; ++i){
             addLine(dataview, offset + i * 64, -lines + i * biggest, 0, -lines, -lines + i * biggest, 0, lines, 100, 100, 100);
             addLine(dataview, offset + i * 64 + 32, -lines, 0, -lines + i * biggest, lines, 0, -lines + i * biggest, 100, 100, 100);
     }

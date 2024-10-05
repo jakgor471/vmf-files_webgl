@@ -3,7 +3,8 @@
 /*
 ============ Plane thingies ============
 */
-const EPSILON = 1.0/512;
+const EPSILON = 1.0/16384;
+const INTERSECTION_EPSILON = 1.0/256;
 
 function planeFromTri(p1, p2, p3){
     let normal = glMatrix.vec3.cross(glMatrix.vec3.create(), [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]], [p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]]);
@@ -488,7 +489,7 @@ function indexOfIntersectionStr(i, j, k){
 
 function pointInHull(point, sides){
     for(let i = 0; i < sides.length; ++i){
-        if(glMatrix.vec3.dot(point, sides[i].plane) - sides[i].plane[3] < -EPSILON)
+        if(glMatrix.vec3.dot(point, sides[i].plane) - sides[i].plane[3] < -INTERSECTION_EPSILON)
             return false;
     }
 
@@ -520,7 +521,7 @@ function pointOfIntersection(pl1, pl2, pl3){
 
     const det = glMatrix.vec3.dot(pl1, glMatrix.vec3.cross(cross, pl2, pl3));
 
-    if(Math.abs(det) < EPSILON) return null;
+    if(Math.abs(det) < INTERSECTION_EPSILON) return null;
 
     const result = glMatrix.vec3.create();
     glMatrix.vec3.cross(cross, pl2, pl3);
@@ -558,11 +559,11 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
         const pl1 = sides[i].plane;
         for(let j = 0; j < sides.length; ++j){
             const pl2 = sides[j].plane;
-            if(Math.abs(glMatrix.vec3.dot(pl1, pl2)) > 1-EPSILON) continue; //planes are parallel
+            if(Math.abs(glMatrix.vec3.dot(pl1, pl2)) > 1-INTERSECTION_EPSILON) continue; //planes are parallel
 
             for(let k = 0; k < sides.length; ++k){
                 const pl3 = sides[k].plane;
-                if(Math.abs(glMatrix.vec3.dot(pl1, pl3)) > 1-EPSILON || Math.abs(glMatrix.vec3.dot(pl2, pl3)) > 1-EPSILON ) continue; //plane is parallel to p1 or p2
+                if(Math.abs(glMatrix.vec3.dot(pl1, pl3)) > 1-INTERSECTION_EPSILON || Math.abs(glMatrix.vec3.dot(pl2, pl3)) > 1-INTERSECTION_EPSILON ) continue; //plane is parallel to p1 or p2
 
                 const intIndex = indexOfIntersection(i, j, k);
 
@@ -625,7 +626,7 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
                 const fromcenter2 = glMatrix.vec3.subtract(glMatrix.vec3.create(), points[k], center);
                 const cross = glMatrix.vec3.dot(pl1, glMatrix.vec3.cross(tempVector, fromcenter, fromcenter2));
 
-                if(cross < EPSILON)
+                if(cross < INTERSECTION_EPSILON)
                     continue;
 
                 glMatrix.vec3.normalize(fromcenter2, fromcenter2);

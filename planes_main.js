@@ -295,13 +295,15 @@ function main() {
     const logError = (str)=>{
         errorLog.classList.add("errorlog_error");
         errorLog.innerHTML = str;
-        setTimeout(()=>{errorLog.innerHTML = ""; errorLog.classList.remove("errorlog_error")}, 8000)
+        setTimeout(()=>{errorLog.innerHTML = ""; errorLog.classList.remove("errorlog_error")}, 8000);
+        console.log(str);
     }
 
     const logInfo = (str)=>{
         errorLog.classList.add("errorlog_info");
         errorLog.innerHTML = str;
-        setTimeout(()=>{errorLog.innerHTML = ""; errorLog.classList.remove("errorlog_info")}, 8000)
+        setTimeout(()=>{errorLog.innerHTML = ""; errorLog.classList.remove("errorlog_info")}, 8000);
+        console.log(str);
     }
 
     const loadVmf = (newVmfData, method) => {

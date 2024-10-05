@@ -468,7 +468,7 @@ function createSolid_quakemethod(sides, animation, vertexData){
     return center;
 }
 
-function threePlaneIndex(i, j, k){
+function indexOfIntersection(i, j, k){
     let temp = i;
     if(i > j){ temp = i; i = j; j = temp;} //sort i, j, k
     if(j > k){ temp = j; j = k; k = temp;}
@@ -477,7 +477,7 @@ function threePlaneIndex(i, j, k){
     return i | j << 8 | k << 16;
 }
 
-function threePlaneIndexStr(i, j, k){
+function indexOfIntersectionStr(i, j, k){
     let temp = i;
     if(i > j){ temp = i; i = j; j = temp;} //sort i, j, k
     if(j > k){ temp = j; j = k; k = temp;}
@@ -541,7 +541,7 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
         [0.831, 0.694, 0.235, 1], [0.769, 0.878, 0.439, 1], [0.831, 0.286, 0.235, 1], [0.796, 0.624, 0.91, 1] 
     ]
 
-    const shouldAnimateInvalids = sides.length < 64; //too many invalid points will be generated!
+    const shouldAnimate = sides.length < 64; //too many invalid points will be generated!
     const brushCenter = glMatrix.vec3.create();
     let numpoints = 0;
 
@@ -559,11 +559,12 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
         for(let j = 0; j < sides.length; ++j){
             const pl2 = sides[j].plane;
             if(Math.abs(glMatrix.vec3.dot(pl1, pl2)) > 1-EPSILON) continue; //planes are parallel
+
             for(let k = 0; k < sides.length; ++k){
                 const pl3 = sides[k].plane;
                 if(Math.abs(glMatrix.vec3.dot(pl1, pl3)) > 1-EPSILON || Math.abs(glMatrix.vec3.dot(pl2, pl3)) > 1-EPSILON ) continue; //plane is parallel to p1 or p2
 
-                const intIndex = threePlaneIndex(i, j, k);
+                const intIndex = indexOfIntersection(i, j, k);
 
                 if(intSet.has(intIndex))
                     continue;
@@ -597,19 +598,17 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
                     invalidPoints.push(p);
                 }
 
-                for(let np = 0; np < points.length; ++np)
-                    animData.push({type: "pt", data: points[np], color: [0, 1, 0, 1]});
-
-                if(shouldAnimateInvalids){
+                if(shouldAnimate){
+                    for(let np = 0; np < points.length; ++np)
+                        animData.push({type: "pt", data: points[np], color: [0, 1, 0, 1]});
                     for(let np = 0; np < invalidPoints.length; ++np)
                         animData.push({type: "pt", data: invalidPoints[np], color: [1, 0, 0, 1]});
+                    animation.push({frametype: "d", data: animData});
                 }
-
-                animation.push({frametype: "d", data: animData});
             }
         }
 
-        if(!points || points.length < 3) continue;
+        if(points.length < 3) continue;
 
         const pRec = 1.0 / points.length;
         center[0] *= pRec; center[1] *= pRec; center[2] *= pRec;
@@ -702,6 +701,8 @@ function parseFromVmflib(solids, method){
     const buffer = new ArrayBuffer(vertexData.windingTriangles * 72); //84
     let floatView = new Float32Array(buffer);
     let offset = 0;
+
+    //triangulation
     for(let i = 0; i < vertexData.windings.length; ++i){
         const curWinding = vertexData.windings[i];
         for(let j = 0; j < curWinding.length - 2; ++j){

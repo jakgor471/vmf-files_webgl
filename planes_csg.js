@@ -202,7 +202,7 @@ function hashKeyVector(p){
     return x.toString(32) + y.toString(32) + z.toString(32);
 }
 
-function getVertexIndex(p, n, prevpoint, nextpoint, group, vertexData){
+function addVertexData(p, n, vertexData){
     //const hash = hashKeyVector(p);
     //let entry = vertexData.smooth.get(hash);
     //let shouldAdd = false;
@@ -420,7 +420,7 @@ function createSolid_quakemethod(sides, animation, vertexData){
 
         const pl1 = sides[i].plane;
         const winding = [];
-        let points = baseWinding(sides[i].plane, MAXMAPSIZE / 2);
+        let points = baseWinding(sides[i].plane, MAXMAPSIZE);
         animation.push({frametype: "d", data: [{type: "w", data: points}]});
 
         for(let j = 0; j < sides.length && points; ++j){
@@ -445,10 +445,7 @@ function createSolid_quakemethod(sides, animation, vertexData){
             animation.push({frametype: "ab", start: -1, add: points.length - 2});
 
             for(let j = 0; j < points.length; ++j){
-                const prevpoint = points[(j + points.length - 1) % points.length];
-                const nextpoint = points[(j + 1) % points.length];
-
-                winding.push(getVertexIndex(points[j], glMatrix.vec3.negate(glMatrix.vec3.create(), sides[i].plane), prevpoint, nextpoint, 0, vertexData));
+                winding.push(addVertexData(points[j], glMatrix.vec3.negate(glMatrix.vec3.create(), sides[i].plane), vertexData));
             }
 
             vertexData.windings.push(winding);
@@ -646,12 +643,9 @@ function createSolid_intersectionMethod(sides, animation, vertexData){
             createDisplacement(sides[i], points, vertexData, animation);
         } else {
             const winding = [];
-            let prevpoint = points[points.length - 1];
-            for(let j = 0; j < points.length; ++j){
-                const nextpoint = points[(j + 1) % points.length];
 
-                winding.push(getVertexIndex(points[j], glMatrix.vec3.negate(glMatrix.vec3.create(), sides[i].plane), prevpoint, nextpoint, 0, vertexData));
-                prevpoint = points[j];
+            for(let j = 0; j < points.length; ++j){
+                winding.push(addVertexData(points[j], glMatrix.vec3.negate(glMatrix.vec3.create(), sides[i].plane), vertexData));
             }
 
             vertexData.windings.push(winding);

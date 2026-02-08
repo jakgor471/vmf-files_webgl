@@ -20,7 +20,9 @@
 <body>
 	<div id='main'>
 		<h1>VMF WebGL Preview</h1>
+		<hr>
 		<p>Demo and article by Jakgor471 (<a href='https://github.com/jakgor471/'>My GitHub</a>)</p>
+		<p>Short project summary <a href="#summary">below</a></p>
 		
 		<canvas id="glcanvas" width="1000" height="600"></canvas>
 		<div><span id="error_log"></span></div>
@@ -51,6 +53,45 @@
 			<input id="checkbox_3dskybox" type="checkbox"><label for='checkbox_3dskybox'>Draw 3D Skybox</label><br><br>
 			<input id="checkbox_trackcamera" type="checkbox"><label for='checkbox_trackcamera'>Camera tracking</label><br><br>
 		</div>
+		<hr>
+
+		<div id="summary">
+			<h1>About the project&#128269;</h1>
+			<p>My fascination with <b>Valve Map Format</b> started around the year 2020, when I was planning on creating an addon for Garry's Mod that would allow 
+			importing VMF prefabs into the game and using them as regular props. I've stumbled upon an article by 
+			<a href="https://github.com/stefanha/map-files">Stefan Hajnoczi</a> and tried following it, to no avail due to lack of mathematical knowledge and intuition on my part.</p>
+			<p>
+			Years later, shortly after starting the <i>Mathematical analysis and linear algebra</i> course at the university I've decided to revisit this project. I went with a
+			different approach then Hajnoczi's - instead of <i>intersection method</i> I chose <i>clipping method</i> known from Quake. This time I understood every single formula,
+			this way I was able to troubleshoot any problems. As a <i>culmination</i> I wrote an article on that topic, describing in details the entire process - 
+			it can be found <a href="https://github.com/jakgor471/vmf-files_webgl/blob/main/vmffiles.pdf">here</a>.
+			</p>
+			<p>
+			If it comes to the purpose of this demo I wanted to visualize the process of converting brushes into meshes. Additionaly, this app serves a purpose of a
+			primitive VMF viewer - you can quickly preview and explore a map without Hammer Editor, which is cool!
+			</p>
+			<hr>
+			<h1>How to use the demo app&#128215;</h1>
+			<p>By default, a small demo map is loaded.</p>
+			<p><b>Controls: </b> mouse drag or arrow keys to look around, WASD to move, Shift - go down, Space - go up.</p>
+			<ul>
+				<li><b>Construction method</b> - changes how the brushes are being constructed, either by intersection or clipping</li>
+				<li><b>Load from file</b> - allows loading a VMF file from your computer</li>
+				<li><b>Restart</b> - restarts animation, nothing will be visible, as the brushes are yet to be constructed</li>
+				<li><b>Play</b> - plays the animation</li>
+				<li><b>Next frame</b> - jumps to a new frame</li>
+				<li><b>Skip animation</b> - skips to a fully built map</li>
+				<li><b>Skip to solid id</b> - skips to the first frame of a specified solid id (that can be found in a VMF file)</li>
+				<li><b>Go to</b> - teleports to a specified brush by it's solid id</li>
+			</ul>
+			<hr>
+			<h1>AI disclosure&#128511;</h1>
+			<p>Yes, I've used ChatGPT to prettify the CSS for this project, but only for that. What about dead-giveaway-emoticons? I've placed them manually,
+				I just really like them easthetically. Oh and I've used ChatGPT to verify my cross product while deriving a 3 plane intersection formula. There 
+				was a small mistake and I was going crazy trying to find it. All it took was flipping the sign &#128529;
+			</p>
+		</div>
+	</div>
 </body>
 
 </html>

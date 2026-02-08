@@ -373,6 +373,27 @@ function main() {
         }
     }
 
+    const loadDefault = async()=>{
+        const res = await fetch("res/gm_uniontex_redux.gz");
+        const decompressedStream = res.body
+        .pipeThrough(new DecompressionStream("gzip"));
+        const text = await new Response(decompressedStream).text();
+
+        return vmfLib.parseVmf(text);
+    }
+
+    loadDefault().then((data) => {
+        loadVmf(data, document.getElementById("select_method").selectedOptions[0].value);
+        solidTriangles = totalTriangles;
+        dispTriangles = totalDispTriangles;
+        freeCompiledFrame(gl, compiledAnimFrame);
+        compiledAnimFrame = null;
+        curAnimFrame = animFrames.length;
+        camera.trackPoint = null;
+
+        vmfData = data;
+    })
+
     const loadFile = (event)=>{
         let fileselect = event != null ? event.target : document.getElementById("button_file");
         if(!fileselect.files[0])
